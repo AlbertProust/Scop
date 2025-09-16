@@ -1,0 +1,1 @@
+g++ scop.cpp -o scop -lGL -lGLU -lglfw			w
