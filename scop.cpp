@@ -145,6 +145,10 @@ void printControls() {
 void render() {
     // Effacer l'écran
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+   // Always check that our framebuffer is ok
+   if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+       return false;
     glColor3f(1.0f, 1.0f, 1.0f); // couleur blanche pour le modèle
     
     // Mode immediate pour dessiner les triangles

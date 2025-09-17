@@ -3,7 +3,7 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import math
-
+import random
 
 cameraX, cameraY, cameraZ = 0.0, 0.0, 5.0
 targetX, targetY, targetZ = 0.0, 0.0, 0.0
@@ -11,9 +11,7 @@ cameraDistance = 5.0
 cameraYaw = 0.0
 cameraPitch = 0.0
 
-x, y, z = [], [], []
-vertices = []
-indices = []
+vertices, indices, faces, colors, = [], [], [], []
 
 
 def key_callback(window, key, scancode, action, mods):
@@ -40,7 +38,6 @@ def key_callback(window, key, scancode, action, mods):
             cameraPitch = 1.5
         if cameraPitch < -1.5:
             cameraPitch = -1.5
-
         if key == glfw.KEY_Q:
             cameraDistance += moveSpeed
         if key == glfw.KEY_E:
@@ -72,25 +69,26 @@ def key_callback(window, key, scancode, action, mods):
 
 def loadOBJ(filename):
     global vertices, indices
-    global x, y, z
     global targetX, targetY, targetZ
     try:
         with open(filename, "r") as f:
             i = 0
+            x, y, z = [], [], []
             for line in f:
                 if line.startswith("v "):
                     parts = line.strip().split()[1:]
-                    x2, y2, z2 = map(float, parts)
-                    x.append(x2)
-                    y.append(y2)
-                    z.append(z2)
-                    print(x[i], y[i], z[i])
+                    xa, ya, za = map(float, parts)
+                    x.append(xa)
+                    y.append(ya)
+                    z.append(za)
                     vertices.append((x[i], y[i], z[i]))
                     i += 1
                 elif line.startswith("f "):
                     parts = line.strip().split()[1:]
-                    idx = [int(p.split("/")[0]) - 1 for p in parts]
-                    indices.extend(idx)
+                    face = [int(p.split("/")[0]) - 1 for p in parts]
+                    if len(face) == 3:
+                        faces.append(face)
+                        colors.append((random.random(), random.random(), random.random()))
                     i += 1
         targetX = (max(x) + min(x))/2
         targetY = (max(y) + min(y))/2
@@ -103,12 +101,13 @@ def loadOBJ(filename):
 
 def render():
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    glColor3f(1.0, 1.0, 1.0)
 
     glBegin(GL_TRIANGLES)
-    for i in indices:
-        v = vertices[i]
-        glVertex3f(*v)
+    for i, face in enumerate(faces):
+        glColor3f(*colors[i])
+        for idx in face:
+            x, y, z = vertices[idx]
+            glVertex3f(x, y, z)
     glEnd()
 
 def printControls():
