@@ -157,7 +157,7 @@ void render() {
 }
 
 int main(int ac, char **argv) {
-    // Initialisation de GLFW pour la gestion de la fenêtre et des événements
+
     if (ac != 2) {
         std::cerr << "Erreur : aucun fichier demandé" << std::endl;
         return -1;
@@ -167,19 +167,16 @@ int main(int ac, char **argv) {
         return -1;
     }
     
-    // Création d'une fenêtre
     GLFWwindow* window = glfwCreateWindow(1600, 1200, "Modelisation .obj en C++", nullptr, nullptr);
     if (!window) {
         std::cerr << "Erreur : impossible de créer la fenêtre GLFW" << std::endl;
         glfwTerminate();
         return -1;
     }
-    
     glfwMakeContextCurrent(window);
     
     glEnable(GL_DEPTH_TEST);
-    
-    // Initialisation de la position de la caméra en utilisant les coordonnées sphériques
+
     cameraDistance = 5.0f;
     cameraYaw = 0.0f;
     cameraPitch = 0.0f;
@@ -187,7 +184,6 @@ int main(int ac, char **argv) {
     cameraY = targetY + cameraDistance * sin(cameraPitch);
     cameraZ = targetZ + cameraDistance * cos(cameraYaw) * cos(cameraPitch);
     
-    // Enregistrement du callback pour les touches clavier
     glfwSetKeyCallback(window, key_callback);
 
     if (!loadOBJ(argv[1])) {

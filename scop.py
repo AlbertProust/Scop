@@ -4,36 +4,28 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import math
 
-# ===============================
-# Variables caméra
-# ===============================
+
 cameraX, cameraY, cameraZ = 0.0, 0.0, 5.0
 targetX, targetY, targetZ = 0.0, 0.0, 0.0
 cameraDistance = 5.0
 cameraYaw = 0.0
 cameraPitch = 0.0
 
-# ===============================
-# Stockage du modèle
-# ===============================
+x, y, z = [], [], []
 vertices = []
 indices = []
 
 
-# ===============================
-# Callback clavier
-# ===============================
 def key_callback(window, key, scancode, action, mods):
     global cameraX, cameraY, cameraZ
     global targetX, targetY, targetZ
     global cameraDistance, cameraYaw, cameraPitch
-
+    global x, y, z
     moveSpeed = 0.1
     rotateSpeed = 0.05
 
     if action in (glfw.PRESS, glfw.REPEAT):
 
-        # Rotation caméra
         if key in (glfw.KEY_A, glfw.KEY_LEFT):
             cameraYaw += rotateSpeed
         if key in (glfw.KEY_D, glfw.KEY_RIGHT):
@@ -49,7 +41,6 @@ def key_callback(window, key, scancode, action, mods):
         if cameraPitch < -1.5:
             cameraPitch = -1.5
 
-        # Zoom
         if key == glfw.KEY_Q:
             cameraDistance += moveSpeed
         if key == glfw.KEY_E:
@@ -59,15 +50,18 @@ def key_callback(window, key, scancode, action, mods):
 
         # Déplacement du centre
         if key == glfw.KEY_J:
-            targetX -= moveSpeed
-        if key == glfw.KEY_L:
             targetX += moveSpeed
+        if key == glfw.KEY_L:
+            targetX -= moveSpeed
         if key == glfw.KEY_I:
             targetY += moveSpeed
         if key == glfw.KEY_K:
             targetY -= moveSpeed
 
         # Calcul position caméra (coord. sphériques)
+        
+        # print(((min.x, max.x), sum((min.x, max.x)), (targetX, targetY, targetZ)))
+        # print( (max(x) + min(x))/2, (max(y) + min(y))/2, (max(z) + min(z))/2)
         cameraX = targetX + cameraDistance * math.sin(cameraYaw) * math.cos(cameraPitch)
         cameraY = targetY + cameraDistance * math.sin(cameraPitch)
         cameraZ = targetZ + cameraDistance * math.cos(cameraYaw) * math.cos(cameraPitch)
@@ -76,33 +70,37 @@ def key_callback(window, key, scancode, action, mods):
             glfw.set_window_should_close(window, True)
 
 
-# ===============================
-# Chargement fichier OBJ
-# ===============================
 def loadOBJ(filename):
     global vertices, indices
+    global x, y, z
+    global targetX, targetY, targetZ
     try:
         with open(filename, "r") as f:
+            i = 0
             for line in f:
                 if line.startswith("v "):
                     parts = line.strip().split()[1:]
-                    x, y, z = map(float, parts)
-                    vertices.append((x, y, z))
+                    x2, y2, z2 = map(float, parts)
+                    x.append(x2)
+                    y.append(y2)
+                    z.append(z2)
+                    print(x[i], y[i], z[i])
+                    vertices.append((x[i], y[i], z[i]))
+                    i += 1
                 elif line.startswith("f "):
                     parts = line.strip().split()[1:]
-                    # On suppose des triangles f v1 v2 v3
                     idx = [int(p.split("/")[0]) - 1 for p in parts]
                     indices.extend(idx)
+                    i += 1
+        targetX = (max(x) + min(x))/2
+        targetY = (max(y) + min(y))/2
+        targetZ = (max(z) + min(z))/2
         print(f"Chargement : {len(vertices)} sommets, {len(indices)//3} faces")
         return True
     except Exception as e:
         print(f"Erreur chargement OBJ : {e}")
         return False
 
-
-# ===============================
-# Rendu
-# ===============================
 def render():
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glColor3f(1.0, 1.0, 1.0)
@@ -113,10 +111,6 @@ def render():
         glVertex3f(*v)
     glEnd()
 
-
-# ===============================
-# Instructions
-# ===============================
 def printControls():
     print("Contrôles caméra :")
     print("  Rotation : W/S/A/D ou flèches")
@@ -124,10 +118,6 @@ def printControls():
     print("  Déplacer centre : I/K/J/L")
     print("  Quitter  : ESC")
 
-
-# ===============================
-# Main
-# ===============================
 def main():
     global cameraX, cameraY, cameraZ, cameraDistance, cameraYaw, cameraPitch
 
@@ -150,7 +140,6 @@ def main():
 
     glEnable(GL_DEPTH_TEST)
 
-    # Init caméra
     cameraDistance = 5.0
     cameraYaw = 0.0
     cameraPitch = 0.0
