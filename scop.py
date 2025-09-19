@@ -2,6 +2,7 @@ import sys
 import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from PIL import Image
 import math
 import random
 
@@ -10,7 +11,9 @@ targetX, targetY, targetZ = 0.0, 0.0, 0.0
 cameraDistance = 5.0
 cameraYaw = 0.0
 cameraPitch = 0.0
-
+texture_id = None
+texture_used = False
+texture_coords = []
 vertices, indices, faces, colors, = [], [], [], []
 
 
@@ -19,11 +22,11 @@ def key_callback(window, key, scancode, action, mods):
     global targetX, targetY, targetZ
     global cameraDistance, cameraYaw, cameraPitch
     global x, y, z
+    global texture_used
     moveSpeed = 0.1
     rotateSpeed = 0.05
 
     if action in (glfw.PRESS, glfw.REPEAT):
-
         if key in (glfw.KEY_A, glfw.KEY_LEFT):
             cameraYaw += rotateSpeed
         if key in (glfw.KEY_D, glfw.KEY_RIGHT):
@@ -33,7 +36,6 @@ def key_callback(window, key, scancode, action, mods):
         if key in (glfw.KEY_S, glfw.KEY_DOWN):
             cameraPitch -= rotateSpeed
 
-        # Limiter le pitch
         if cameraPitch > 1.5:
             cameraPitch = 1.5
         if cameraPitch < -1.5:
@@ -42,10 +44,11 @@ def key_callback(window, key, scancode, action, mods):
             cameraDistance += moveSpeed
         if key == glfw.KEY_E:
             cameraDistance -= moveSpeed
+        if key == glfw.KEY_T:
+            texture_used = not texture_used
         if cameraDistance < 1.0:
             cameraDistance = 1.0
 
-        # Déplacement du centre
         if key == glfw.KEY_J:
             targetX += moveSpeed
         if key == glfw.KEY_L:
@@ -55,7 +58,6 @@ def key_callback(window, key, scancode, action, mods):
         if key == glfw.KEY_K:
             targetY -= moveSpeed
 
-        # Calcul position caméra (coord. sphériques)
         
         # print(((min.x, max.x), sum((min.x, max.x)), (targetX, targetY, targetZ)))
         # print( (max(x) + min(x))/2, (max(y) + min(y))/2, (max(z) + min(z))/2)
@@ -70,6 +72,7 @@ def key_callback(window, key, scancode, action, mods):
 def loadOBJ(filename):
     global vertices, indices
     global targetX, targetY, targetZ
+    global texture_coords
     try:
         with open(filename, "r") as f:
             i = 0
@@ -93,22 +96,64 @@ def loadOBJ(filename):
         targetX = (max(x) + min(x))/2
         targetY = (max(y) + min(y))/2
         targetZ = (max(z) + min(z))/2
+        for v in vertices:
+            u = (v[0] + 1.0) / 2.0  # normalisation de [-1,1] vers [0,1]
+            v_tex = (v[1] + 1.0) / 2.0
+            texture_coords.append((u, v_tex))
         print(f"Chargement : {len(vertices)} sommets, {len(indices)//3} faces")
         return True
     except Exception as e:
         print(f"Erreur chargement OBJ : {e}")
         return False
 
-def render():
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+def loadTEXTURE(filename):
+    global texture_id
+    try:
+        img = Image.open(filename).transpose(Image.FLIP_TOP_BOTTOM)
+        img_data = img.convert("RGB").tobytes()
 
+        texture_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, texture_id)
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width, img.height, 0,
+                    GL_RGB, GL_UNSIGNED_BYTE, img_data)
+
+        glBindTexture(GL_TEXTURE_2D, 0)
+        print("Texture loaded")
+        return (True)
+    except Exception as e:
+        print(f"Erreur chargement Texture : {e}")
+        return False
+
+def render():
+    global texture_used
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    if texture_used and texture_id:
+        glEnable(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, texture_id)
+        # print(texture_id)
+    else :
+        glDisable(GL_TEXTURE_2D)
+    
     glBegin(GL_TRIANGLES)
+    if (texture_used):
+        for i, idx in enumerate(indices):
+            u, v = texture_coords[indices]
+            glTexCoord2f(u, v)
     for i, face in enumerate(faces):
-        glColor3f(*colors[i])
+        if (not texture_used):
+            glColor3f(*colors[i])
         for idx in face:
             x, y, z = vertices[idx]
             glVertex3f(x, y, z)
     glEnd()
+    if texture_used:
+        glBindTexture(GL_TEXTURE_2D, 0)
+        glDisable(GL_TEXTURE_2D)
 
 def printControls():
     print("Contrôles caméra :")
@@ -147,6 +192,9 @@ def main():
     cameraZ = targetZ + cameraDistance * math.cos(cameraYaw) * math.cos(cameraPitch)
 
     if not loadOBJ(sys.argv[1]):
+        glfw.terminate()
+        return
+    if not loadTEXTURE("resources/42.obj"):
         glfw.terminate()
         return
 
