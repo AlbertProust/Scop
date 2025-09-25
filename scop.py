@@ -74,80 +74,96 @@ def loadOBJ(filename):
     global targetX, targetY, targetZ
     global texture_coords
     try:
+        x, y, z = [], [], []
         with open(filename, "r") as f:
-            i = 0
-            x, y, z = [], [], []
             for line in f:
                 if line.startswith("v "):
                     parts = line.strip().split()[1:]
                     xa, ya, za = map(float, parts)
-                    x.append(xa)
-                    y.append(ya)
-                    z.append(za)
-                    vertices.append((x[i], y[i], z[i]))
-                    i += 1
+                    vertices.append((xa, ya, za))
+                    x.append(xa); y.append(ya); z.append(za)
                 elif line.startswith("f "):
                     parts = line.strip().split()[1:]
                     face = [int(p.split("/")[0]) - 1 for p in parts]
                     if len(face) == 3:
                         faces.append(face)
                         colors.append((random.random(), random.random(), random.random()))
-                    i += 1
         targetX = (max(x) + min(x))/2
         targetY = (max(y) + min(y))/2
         targetZ = (max(z) + min(z))/2
-        for v in vertices:
-            u = (v[0] + 1.0) / 2.0  # normalisation de [-1,1] vers [0,1]
-            v_tex = (v[1] + 1.0) / 2.0
-            texture_coords.append((u, v_tex))
-        print(f"Chargement : {len(vertices)} sommets, {len(indices)//3} faces")
+        range_x = max(x) - min(x)
+        range_z = max(z) - min(z)
+
+        # eviter division par 0
+        if range_x == 0: range_x = 1.0
+        if range_z == 0: range_z = 1.0
+
+        for (x2, y2, z2) in vertices:
+            u = (x2 - min(x)) / range_x
+            v = (z2 - min(z)) / range_z
+            texture_coords.append((u, v))
         return True
     except Exception as e:
         print(f"Erreur chargement OBJ : {e}")
         return False
 
 def loadTEXTURE(filename):
+
     global texture_id
     try:
         img = Image.open(filename).transpose(Image.FLIP_TOP_BOTTOM)
-        img_data = img.convert("RGB").tobytes()
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA")
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+
+        if img.mode == "RGB":
+            fmt = GL_RGB
+        else:
+            fmt = GL_RGBA
+            img = img.convert("RGBA")
+
+        img_data = img.tobytes()
 
         texture_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, texture_id)
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width, img.height, 0,
-                    GL_RGB, GL_UNSIGNED_BYTE, img_data)
+        glTexImage2D(GL_TEXTURE_2D, 0, fmt, img.width, img.height, 0, fmt,
+                      GL_UNSIGNED_BYTE, img_data)
 
+        glGenerateMipmap(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, 0)
-        print("Texture loaded")
+        print("Texture loaded", "mode:", img.mode)
         return (True)
     except Exception as e:
         print(f"Erreur chargement Texture : {e}")
         return False
 
 def render():
+
     global texture_used
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     if texture_used and texture_id:
         glEnable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, texture_id)
-        # print(texture_id)
+        glColor3f(1.0, 1.0, 1.0)
     else :
         glDisable(GL_TEXTURE_2D)
     
     glBegin(GL_TRIANGLES)
-    if (texture_used):
-        for i, idx in enumerate(indices):
-            u, v = texture_coords[indices]
-            glTexCoord2f(u, v)
-    for i, face in enumerate(faces):
-        if (not texture_used):
-            glColor3f(*colors[i])
+    for face, color in zip(faces, colors):
+        if not texture_used:
+            glColor3f(*color)
         for idx in face:
+            if texture_used and texture_coords:
+                u, v = texture_coords[idx]
+                glTexCoord2f(u, v)
             x, y, z = vertices[idx]
             glVertex3f(x, y, z)
     glEnd()
@@ -194,7 +210,7 @@ def main():
     if not loadOBJ(sys.argv[1]):
         glfw.terminate()
         return
-    if not loadTEXTURE("resources/42.obj"):
+    if not loadTEXTURE("resources/texture.png"):
         glfw.terminate()
         return
 
