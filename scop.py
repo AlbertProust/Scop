@@ -2,7 +2,6 @@ import sys
 import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from PIL import Image
 import math
 import random
 
@@ -15,6 +14,131 @@ texture_id = None
 texture_used = False
 texture_coords = []
 vertices, indices, faces, colors, = [], [], [], []
+
+
+def createProceduralTexture(width=256, height=256, pattern="checkerboard"):
+    """
+    Create a procedural texture without external libraries.
+    Patterns: 'checkerboard', 'gradient', 'noise'
+    """
+    global texture_id
+    
+    # Create pixel data
+    pixels = bytearray(width * height * 3)
+    
+    for y in range(height):
+        for x in range(width):
+            idx = (y * width + x) * 3
+            
+            if pattern == "checkerboard":
+                # Checkerboard pattern
+                square_size = 16
+                if ((x // square_size) + (y // square_size)) % 2 == 0:
+                    pixels[idx:idx+3] = [255, 255, 255]  # White
+                else:
+                    pixels[idx:idx+3] = [100, 100, 100]  # Gray
+                    
+            elif pattern == "gradient":
+                # Gradient from dark to light
+                val = int((x / width) * 255)
+                pixels[idx:idx+3] = [val, val, val]
+                
+            elif pattern == "noise":
+                # Pseudo-random noise
+                val = (int((x * 73 + y * 37) * 12345) % 256)
+                pixels[idx:idx+3] = [val, val, val]
+    
+    # Create OpenGL texture
+    texture_id = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, texture_id)
+    
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, 
+                 GL_RGB, GL_UNSIGNED_BYTE, bytes(pixels))
+    
+    glBindTexture(GL_TEXTURE_2D, 0)
+    print(f"Procedural texture created ({width}x{height}, pattern: {pattern})")
+    return True
+
+
+def loadBMP(filename):
+    """
+    Load a BMP (Bitmap) image file without external libraries.
+    Supports uncompressed 24-bit and 32-bit BMP files.
+    """
+    global texture_id
+    try:
+        with open(filename, 'rb') as f:
+            # Read BMP file header (14 bytes)
+            header = f.read(14)
+            if header[0:2] != b'BM':
+                print("Error: Not a valid BMP file")
+                return False
+            
+            # Read DIB header (40 bytes for standard BMP)
+            dib_header = f.read(40)
+            
+            # Parse header info (little-endian)
+            width = int.from_bytes(dib_header[4:8], 'little')
+            height = int.from_bytes(dib_header[8:12], 'little')
+            bits_per_pixel = int.from_bytes(dib_header[14:16], 'little')
+            compression = int.from_bytes(dib_header[16:20], 'little')
+            
+            if compression != 0:
+                print("Error: Compressed BMP files not supported")
+                return False
+            
+            if bits_per_pixel not in [24, 32]:
+                print(f"Error: Only 24-bit and 32-bit BMP supported (found {bits_per_pixel}-bit)")
+                return False
+            
+            # Read pixel data
+            bytes_per_pixel = bits_per_pixel // 8
+            row_size = (width * bytes_per_pixel + 3) // 4 * 4  # Rows are padded to 4-byte boundary
+            
+            # BMP stores image bottom-to-top, we need to flip it
+            pixel_data = bytearray(width * height * 3)
+            
+            for y in range(height):
+                row = f.read(row_size)
+                if len(row) < width * bytes_per_pixel:
+                    print("Error: Incomplete pixel data")
+                    return False
+                
+                # Flip vertically and convert BGR to RGB
+                dest_y = height - 1 - y
+                for x in range(width):
+                    src_idx = x * bytes_per_pixel
+                    dst_idx = (dest_y * width + x) * 3
+                    
+                    # BMP uses BGR order, convert to RGB
+                    pixel_data[dst_idx] = row[src_idx + 2]      # R
+                    pixel_data[dst_idx + 1] = row[src_idx + 1]  # G
+                    pixel_data[dst_idx + 2] = row[src_idx]      # B
+            
+            # Create OpenGL texture
+            texture_id = glGenTextures(1)
+            glBindTexture(GL_TEXTURE_2D, texture_id)
+            
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+            
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                         GL_RGB, GL_UNSIGNED_BYTE, bytes(pixel_data))
+            
+            glBindTexture(GL_TEXTURE_2D, 0)
+            print(f"BMP texture loaded: {filename} ({width}x{height}, {bits_per_pixel}-bit)")
+            return True
+            
+    except Exception as e:
+        print(f"Error loading BMP: {e}")
+        return False
 
 
 def key_callback(window, key, scancode, action, mods):
@@ -85,9 +209,13 @@ def loadOBJ(filename):
                 elif line.startswith("f "):
                     parts = line.strip().split()[1:]
                     face = [int(p.split("/")[0]) - 1 for p in parts]
-                    if len(face) == 3:
-                        faces.append(face)
-                        colors.append((random.random(), random.random(), random.random()))
+                    # Triangulate polygons with more than 3 vertices
+                    if len(face) >= 3:
+                        color = (random.random(), random.random(), random.random())
+                        for i in range(1, len(face) - 1):
+                            triangle = [face[0], face[i], face[i + 1]]
+                            faces.append(triangle)
+                            colors.append(color)
         targetX = (max(x) + min(x))/2
         targetY = (max(y) + min(y))/2
         targetZ = (max(z) + min(z))/2
@@ -107,42 +235,6 @@ def loadOBJ(filename):
         print(f"Erreur chargement OBJ : {e}")
         return False
 
-def loadTEXTURE(filename):
-
-    global texture_id
-    try:
-        img = Image.open(filename).transpose(Image.FLIP_TOP_BOTTOM)
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGBA")
-
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-
-        if img.mode == "RGB":
-            fmt = GL_RGB
-        else:
-            fmt = GL_RGBA
-            img = img.convert("RGBA")
-
-        img_data = img.tobytes()
-
-        texture_id = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture_id)
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-
-        glTexImage2D(GL_TEXTURE_2D, 0, fmt, img.width, img.height, 0, fmt,
-                      GL_UNSIGNED_BYTE, img_data)
-
-        glGenerateMipmap(GL_TEXTURE_2D)
-        glBindTexture(GL_TEXTURE_2D, 0)
-        print("Texture loaded", "mode:", img.mode)
-        return (True)
-    except Exception as e:
-        print(f"Erreur chargement Texture : {e}")
-        return False
 
 def render():
 
@@ -210,9 +302,11 @@ def main():
     if not loadOBJ(sys.argv[1]):
         glfw.terminate()
         return
-    if not loadTEXTURE("resources/texture.png"):
-        glfw.terminate()
-        return
+
+    # Load or create a texture
+    # createProceduralTexture(256, 256, "checkerboard")
+    # Or load a BMP file:
+    loadBMP("resources/texture_sky.bmp")
 
     printControls()
 
@@ -220,7 +314,7 @@ def main():
         glfw.poll_events()
 
         width, height = glfw.get_framebuffer_size(window)
-        ratio = width / float(height)
+        ratio = width / float(height if height > 0 else 1)
 
         glViewport(0, 0, width, height)
         glMatrixMode(GL_PROJECTION)
