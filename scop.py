@@ -3,7 +3,7 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import math
-import random
+import os
 
 cameraX, cameraY, cameraZ = 0.0, 0.0, 5.0
 targetX, targetY, targetZ = 0.0, 0.0, 0.0
@@ -14,55 +14,6 @@ texture_id = None
 texture_used = False
 texture_coords = []
 vertices, indices, faces, colors, = [], [], [], []
-
-
-def createProceduralTexture(width=256, height=256, pattern="checkerboard"):
-    """
-    Create a procedural texture without external libraries.
-    Patterns: 'checkerboard', 'gradient', 'noise'
-    """
-    global texture_id
-    
-    # Create pixel data
-    pixels = bytearray(width * height * 3)
-    
-    for y in range(height):
-        for x in range(width):
-            idx = (y * width + x) * 3
-            
-            if pattern == "checkerboard":
-                # Checkerboard pattern
-                square_size = 16
-                if ((x // square_size) + (y // square_size)) % 2 == 0:
-                    pixels[idx:idx+3] = [255, 255, 255]  # White
-                else:
-                    pixels[idx:idx+3] = [100, 100, 100]  # Gray
-                    
-            elif pattern == "gradient":
-                # Gradient from dark to light
-                val = int((x / width) * 255)
-                pixels[idx:idx+3] = [val, val, val]
-                
-            elif pattern == "noise":
-                # Pseudo-random noise
-                val = (int((x * 73 + y * 37) * 12345) % 256)
-                pixels[idx:idx+3] = [val, val, val]
-    
-    # Create OpenGL texture
-    texture_id = glGenTextures(1)
-    glBindTexture(GL_TEXTURE_2D, texture_id)
-    
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-    
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, 
-                 GL_RGB, GL_UNSIGNED_BYTE, bytes(pixels))
-    
-    glBindTexture(GL_TEXTURE_2D, 0)
-    print(f"Procedural texture created ({width}x{height}, pattern: {pattern})")
-    return True
 
 
 def loadBMP(filename):
@@ -168,7 +119,7 @@ def key_callback(window, key, scancode, action, mods):
             cameraDistance += moveSpeed
         if key == glfw.KEY_E:
             cameraDistance -= moveSpeed
-        if key == glfw.KEY_T:
+        if key == glfw.KEY_T and texture_id:
             texture_used = not texture_used
         if cameraDistance < 1.0:
             cameraDistance = 1.0
@@ -183,8 +134,6 @@ def key_callback(window, key, scancode, action, mods):
             targetY -= moveSpeed
 
         
-        # print(((min.x, max.x), sum((min.x, max.x)), (targetX, targetY, targetZ)))
-        # print( (max(x) + min(x))/2, (max(y) + min(y))/2, (max(z) + min(z))/2)
         cameraX = targetX + cameraDistance * math.sin(cameraYaw) * math.cos(cameraPitch)
         cameraY = targetY + cameraDistance * math.sin(cameraPitch)
         cameraZ = targetZ + cameraDistance * math.cos(cameraYaw) * math.cos(cameraPitch)
@@ -211,10 +160,12 @@ def loadOBJ(filename):
                     face = [int(p.split("/")[0]) - 1 for p in parts]
                     # Triangulate polygons with more than 3 vertices
                     if len(face) >= 3:
-                        color = (random.random(), random.random(), random.random())
+                        
+                        shade = 0.2 + 0.6 * ((len(colors) % 10) / 9.0)
+                        color = (shade, shade, shade)
                         for i in range(1, len(face) - 1):
-                            triangle = [face[0], face[i], face[i + 1]]
-                            faces.append(triangle)
+                            polygon = [face[0], face[i], face[i + 1]]
+                            faces.append(polygon)
                             colors.append(color)
         targetX = (max(x) + min(x))/2
         targetY = (max(y) + min(y))/2
@@ -239,7 +190,7 @@ def loadOBJ(filename):
 def render():
 
     global texture_used
-
+    global vertices
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     if texture_used and texture_id:
         glEnable(GL_TEXTURE_2D)
@@ -272,19 +223,18 @@ def printControls():
 
 def main():
     global cameraX, cameraY, cameraZ, cameraDistance, cameraYaw, cameraPitch
-
-    if len(sys.argv) != 2:
-        print("Usage: python viewer.py fichier.obj")
+    if len(sys.argv) > 3 or len(sys.argv) < 2:
+        print("Usage: python viewer.py fichier.obj optional_texture.obj")
         return
 
     if not glfw.init():
-        print("Erreur GLFW")
+        print("GLFW error")
         return
 
-    window = glfw.create_window(1600, 1200, "Visualiseur .OBJ en Python", None, None)
+    window = glfw.create_window(1600, 1200, ".OBJ Visualizer in Python", None, None)
     if not window:
         glfw.terminate()
-        print("Impossible de créer la fenêtre")
+        print("GLFW error: window creation failed")
         return
 
     glfw.make_context_current(window)
@@ -292,22 +242,28 @@ def main():
 
     glEnable(GL_DEPTH_TEST)
 
-    cameraDistance = 5.0
-    cameraYaw = 0.0
-    cameraPitch = 0.0
-    cameraX = targetX + cameraDistance * math.sin(cameraYaw) * math.cos(cameraPitch)
-    cameraY = targetY + cameraDistance * math.sin(cameraPitch)
-    cameraZ = targetZ + cameraDistance * math.cos(cameraYaw) * math.cos(cameraPitch)
+    filename, file_extension = os.path.splitext(sys.argv[1])
+    if file_extension.lower() != ".obj":
+        print("Error: The first argument must be an .obj file")
+        glfw.terminate()
+        return
 
     if not loadOBJ(sys.argv[1]):
         glfw.terminate()
         return
+        
+    cameraDistance = 5.0
+    cameraYaw = 0.0
+    cameraPitch = 0.0
 
-    # Load or create a texture
-    # createProceduralTexture(256, 256, "checkerboard")
-    # Or load a BMP file:
-    loadBMP("resources/texture_sky.bmp")
+    cameraX = targetX + cameraDistance * math.sin(cameraYaw) * math.cos(cameraPitch)
+    cameraY = targetY + cameraDistance * math.sin(cameraPitch)
+    cameraZ = targetZ + cameraDistance * math.cos(cameraYaw) * math.cos(cameraPitch)
 
+    # load a texture BMP file:
+    if len(sys.argv) == 3:
+        loadBMP(sys.argv[2])
+        
     printControls()
 
     while not glfw.window_should_close(window):
@@ -324,9 +280,8 @@ def main():
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
         gluLookAt(cameraX, cameraY, cameraZ,
-                  targetX, targetY, targetZ,
-                  0.0, 1.0, 0.0)
-
+                targetX, targetY, targetZ,
+                0.0, 1.0, 0.0)
         render()
         glfw.swap_buffers(window)
 
