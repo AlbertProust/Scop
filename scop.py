@@ -24,6 +24,7 @@ def loadBMP(filename):
     global texture_id
     try:
         with open(filename, 'rb') as f:
+
             # Read BMP file header (14 bytes)
             header = f.read(14)
             if header[0:2] != b'BM':
@@ -47,7 +48,6 @@ def loadBMP(filename):
                 print(f"Error: Only 24-bit and 32-bit BMP supported (found {bits_per_pixel}-bit)")
                 return False
             
-            # Read pixel data
             bytes_per_pixel = bits_per_pixel // 8
             row_size = (width * bytes_per_pixel + 3) // 4 * 4  # Rows are padded to 4-byte boundary
             
@@ -66,12 +66,10 @@ def loadBMP(filename):
                     src_idx = x * bytes_per_pixel
                     dst_idx = (dest_y * width + x) * 3
                     
-                    # BMP uses BGR order, convert to RGB
                     pixel_data[dst_idx] = row[src_idx + 2]      # R
                     pixel_data[dst_idx + 1] = row[src_idx + 1]  # G
                     pixel_data[dst_idx + 2] = row[src_idx]      # B
             
-            # Create OpenGL texture
             texture_id = glGenTextures(1)
             glBindTexture(GL_TEXTURE_2D, texture_id)
             
@@ -102,14 +100,29 @@ def key_callback(window, key, scancode, action, mods):
     rotateSpeed = 0.05
 
     if action in (glfw.PRESS, glfw.REPEAT):
-        if key in (glfw.KEY_A, glfw.KEY_LEFT):
-            cameraYaw += rotateSpeed
-        if key in (glfw.KEY_D, glfw.KEY_RIGHT):
-            cameraYaw -= rotateSpeed
-        if key in (glfw.KEY_W, glfw.KEY_UP):
-            cameraPitch += rotateSpeed
-        if key in (glfw.KEY_S, glfw.KEY_DOWN):
-            cameraPitch -= rotateSpeed
+        match key:
+            case glfw.KEY_A, glfw.KEY_LEFT, glfw.KEY_D, glfw.KEY_RIGHT:
+                if key in (glfw.KEY_A, glfw.KEY_LEFT):
+                    cameraYaw += rotateSpeed if rotateSpeed < 1.5 else 1.5
+                else:
+                    cameraYaw -= rotateSpeed if rotateSpeed > -1.5 else -1.5
+
+                rot_x = np.matrix([
+                        [1,          0,           0],
+                        [0, cos(cameraYaw), -sin(cameraYaw)],
+                        [0, sin(cameraYaw),  cos(cameraYaw)]
+                    ])
+            case glfw.KEY_W, glfw.KEY_UP, glfw.KEY_S, glfw.KEY_DOWN:
+                if key in (glfw.KEY_W, glfw.KEY_UP):
+                    cameraPitch += rotateSpeed
+                else:
+                    cameraPitch -= rotateSpeed
+
+                rot_y = np.matrix([ # rotation matrix for y axis
+                        [cos(cameraPitch),  0, sin(cameraPitch)],
+                        [0,           1,          0],
+                        [-sin(cameraPitch), 0, cos(cameraPitch)]
+                    ])
 
         if cameraPitch > 1.5:
             cameraPitch = 1.5
@@ -137,6 +150,19 @@ def key_callback(window, key, scancode, action, mods):
         cameraX = targetX + cameraDistance * math.sin(cameraYaw) * math.cos(cameraPitch)
         cameraY = targetY + cameraDistance * math.sin(cameraPitch)
         cameraZ = targetZ + cameraDistance * math.cos(cameraYaw) * math.cos(cameraPitch)
+
+
+        #     rot_y = np.matrix([ # rotation matrix for y axis
+        #         [cos(angle),  0, sin(angle)],
+        #         [0,           1,          0],
+        #         [-sin(angle), 0, cos(angle)]
+        #     ])
+
+        #     rot_z = np.matrix([ # rotation matrix for z axis
+        #         [cos(angle), -sin(angle), 0],
+        #         [sin(angle),  cos(angle), 0],
+        #         [         0,           0, 1]
+        #     ])
 
         if key == glfw.KEY_ESCAPE:
             glfw.set_window_should_close(window, True)
@@ -275,6 +301,13 @@ def main():
         glViewport(0, 0, width, height)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
+        
+        # implémenter toi-même :
+        
+        # une matrice de projection perspective
+        # une matrice de view / caméra (lookAt)
+        # envoyer ces matrices à OpenGL avec glLoadMatrixf() ou glMultMatrixf().
+
         gluPerspective(45.0, ratio, 0.1, 100.0)
 
         glMatrixMode(GL_MODELVIEW)
