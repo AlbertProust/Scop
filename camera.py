@@ -1,64 +1,48 @@
-"""Camera controls and input handling."""
 import math
 import glfw
-import config
+import state
+import time
 
 
 def key_callback(window, key, scancode, action, mods):
-    """Handle keyboard input for camera control."""
     moveSpeed = 0.1
     rotateSpeed = 0.05
 
     if action in (glfw.PRESS, glfw.REPEAT):
-        match key:
-            case glfw.KEY_A, glfw.KEY_LEFT, glfw.KEY_D, glfw.KEY_RIGHT:
-                if key in (glfw.KEY_A, glfw.KEY_LEFT):
-                    config.cameraYaw += rotateSpeed if rotateSpeed < 1.5 else 1.5
-                else:
-                    config.cameraYaw -= rotateSpeed if rotateSpeed > -1.5 else -1.5
+        if key in (glfw.KEY_A, glfw.KEY_LEFT):
+            state.cameraYaw += rotateSpeed
+        if key in (glfw.KEY_D, glfw.KEY_RIGHT):
+            state.cameraYaw -= rotateSpeed
+        if key in (glfw.KEY_W, glfw.KEY_UP):
+            state.cameraPitch += rotateSpeed
+        if key in (glfw.KEY_S, glfw.KEY_DOWN):
+            state.cameraPitch -= rotateSpeed
 
-            case glfw.KEY_W, glfw.KEY_UP, glfw.KEY_S, glfw.KEY_DOWN:
-                if key in (glfw.KEY_W, glfw.KEY_UP):
-                    config.cameraPitch += rotateSpeed
-                else:
-                    config.cameraPitch -= rotateSpeed
+        state.cameraPitch = max(-1.5, min(1.5, state.cameraPitch))
 
-        if config.cameraPitch > 1.5:
-            config.cameraPitch = 1.5
-        if config.cameraPitch < -1.5:
-            config.cameraPitch = -1.5
-        
         if key == glfw.KEY_Q:
-            config.cameraDistance += moveSpeed
+            state.cameraDistance += moveSpeed
         if key == glfw.KEY_E:
-            config.cameraDistance -= moveSpeed
-        if key == glfw.KEY_T and config.texture_id:
-            config.texture_used = not config.texture_used
-        if config.cameraDistance < 1.0:
-            config.cameraDistance = 1.0
+            state.cameraDistance -= moveSpeed
+        if key == glfw.KEY_T and state.texture_id:
+            state.transition_active = True
+            state.transition_start = time.time()
+            state.texture_used = not state.texture_used
+        if state.cameraDistance < 1.0:
+            state.cameraDistance = 1.0
 
         if key == glfw.KEY_J:
-            config.targetX += moveSpeed
+            state.targetX += moveSpeed
         if key == glfw.KEY_L:
-            config.targetX -= moveSpeed
+            state.targetX -= moveSpeed
         if key == glfw.KEY_I:
-            config.targetY += moveSpeed
+            state.targetY += moveSpeed
         if key == glfw.KEY_K:
-            config.targetY -= moveSpeed
+            state.targetY -= moveSpeed
 
-        
-        config.cameraX = config.targetX + config.cameraDistance * math.sin(config.cameraYaw) * math.cos(config.cameraPitch)
-        config.cameraY = config.targetY + config.cameraDistance * math.sin(config.cameraPitch)
-        config.cameraZ = config.targetZ + config.cameraDistance * math.cos(config.cameraYaw) * math.cos(config.cameraPitch)
+        state.cameraX = state.targetX + state.cameraDistance * math.sin(state.cameraYaw) * math.cos(state.cameraPitch)
+        state.cameraY = state.targetY + state.cameraDistance * math.sin(state.cameraPitch)
+        state.cameraZ = state.targetZ + state.cameraDistance * math.cos(state.cameraYaw) * math.cos(state.cameraPitch)
 
         if key == glfw.KEY_ESCAPE:
             glfw.set_window_should_close(window, True)
-
-
-def print_controls():
-    """Print camera control instructions."""
-    print("Contrôles caméra :")
-    print("  Rotation : W/S/A/D ou flèches")
-    print("  Zoom     : Q (recule) / E (avance)")
-    print("  Déplacer centre : I/K/J/L")
-    print("  Quitter  : ESC")

@@ -15,7 +15,7 @@ pip install glfw PyOpenGL
 2. Run the viewer from the project root with an OBJ file and optional BMP texture:
 
 ```bash
-python3 -m final_scop path/to/model.obj [path/to/texture.bmp]
+python main.py path/to/model.obj [path/to/texture.bmp]
 ```
 
 3. Use the controls shown in the terminal:
